@@ -1,0 +1,21 @@
+---
+title: '6306: Case Study 2'
+author: "Matt Farrow"
+date: "11/15/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+library(tidyverse)  # general data processing & plotting
+library(here)       # relative location references
+library(janitor)    # data cleanup tools
+library(naniar)     # dealing with missing values
+library(caret)      # misc functions for training and plotting classification and regression models
+library(tidymodels)
+library(GGally)     # for ggpairs
+library(MASS)       # for LDA/QDA
+```
+
