@@ -9,6 +9,37 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(warning = FALSE)
 knitr::opts_chunk$set(message = FALSE)
+```
+
+# Instructions
+
+## Description
+
+DDSAnalytics is an analytics company that specializes in talent management solutions for Fortune 100 companies. Talent management is defined as the iterative process of developing and retaining employees. It may include workforce planning, employee training programs, identifying high-potential employees and reducing/preventing voluntary employee turnover (attrition). To gain a competitive edge over its competition, DDSAnalytics is planning to leverage data science for talent management. The executive leadership has identified predicting employee turnover as its first application of data science for talent management. Before the business green lights the project, they have tasked your data science team to conduct an analysis of existing employee data. 
+
+## Model Creation
+
+You have been given a data set (`CaseStudy2-data.csv`) to do a data analysis to identify factors that lead to attrition. You should identify the top three factors that contribute to turnover (backed up by evidence provided by analysis). There may or may not be a need to create derived attributes, variables, or features. The business is also interested in learning about any job role specific trends that may exist in the data set (e.g., “Data Scientists have the highest job satisfaction”). You can also provide any other interesting trends and observations from your analysis. The analysis should be backed up by robust experimentation and appropriate visualization. Experiments and analysis must be conducted in R. You will also be asked to build a model to predict attrition. Details are below. 
+
+## Model Performance
+
+I provided an additional data set of 300 observations that do not have the labels (attrition or not attrition). We will refer to this data set as the “Competition Set” and is in the file `CaseStudy2CompSet No Attrition.csv`. You must provide a model that will attain at least 60% sensitivity and specificity (60 each = 120 total) for the training and the validation set.
+
+I have also provided an additional data set of 300 observations that do not have the Monthly Incomes. This data is in the file `CaseStudy2CompSet No Salary.csv`. You must provide a model that will attain a RMSE < $3000 for the training and the validation set.
+
+## Models to Use
+
+For classifying attrition, you must use either k-NN or naive Bayes but may also use other models (logistic regression, random forest, LDA, SVM, etc) as long as you compare the results between the two or more models. You may then use any of the models to fulfill the 60/60 sensitivity/specificity requirement. This goes for regression as well; you must use linear regression but may include additional models for comparison and use in the competition (LASSO, random forest, ensemble models, etc.).
+
+## Bonus
+
+Up to 3 points: Create an RShiny App to help visualize you results. The amount of bonus points awarded will be based on correctness, creativeness, effectiveness of the visualization / app. 
+
+# Setup
+
+## Load Libraries
+
+```{r}
 library(tidyverse)  # general data processing & plotting
 library(here)       # relative location references
 library(janitor)    # data cleanup tools
@@ -17,5 +48,117 @@ library(caret)      # misc functions for training and plotting classification an
 library(tidymodels)
 library(GGally)     # for ggpairs
 library(MASS)       # for LDA/QDA
+library(dplyr)      # to get `select` back
 ```
 
+## Load Data
+
+```{r}
+# Load Case Study 2 data
+df <- read_csv(here("data - raw", "CaseStudy2-data.csv"))
+
+# Load comp data without salary
+df_comp_no_sal <- readxl::read_excel(here("data - raw", "CaseStudy2CompSet No Salary.xlsx"))
+
+# Load comp data without attrition
+df_comp_no_att <- read_csv(here("data - raw", "CaseStudy2CompSet No Attrition.csv"))
+```
+
+## Initial Cleanup & Examination
+
+```{r}
+# Clean the column names of each of the three data sets
+df            <- clean_names(df)
+df_comp_no_sal <- clean_names(df_comp_no_sal)
+df_comp_no_att <- clean_names(df_comp_no_att)
+
+head(df, 10)
+dim(df)
+glimpse(df)
+summary(df)
+skimr::skim(df)
+visdat::vis_dat(df)
+DataExplorer::create_report(df)
+# Hmisc::describe(df)
+# psych::describe(df)
+
+# Reports from inspectdf
+library(inspectdf)
+inspect_cat(df)
+inspect_cor(df)
+inspect_types(df)
+inspect_num(df, show_plot = TRUE)
+inspect_imb(df)
+```
+
+# EDA
+
+```{r}
+# Remind myself what the column names are
+colnames(df)
+
+# Run correlations and save output as images to be used in the appendix.
+ggcorr(
+  df,
+  label = TRUE,
+  label_alpha = TRUE,
+  label_size = 3,
+  layout.exp = 2,
+  cex = 3.5,
+  hjust = 1
+)
+# ggsave(here::here("images", "correlation 1.png"))
+
+# Convert all character variables to factors
+df <- df %>% 
+  mutate(across(where(is_character),as_factor))
+
+glimpse(df)
+```
+
+
+# Data Wrangling
+
+```{r}
+
+```
+
+
+# Create Test/Train Splits and Save Data
+
+```{r}
+# # Set seed
+# set.seed(123)
+# 
+# # Save full bank_clean data set
+# write_csv(bank_clean, here("data - output", "bank_clean.csv"))
+# 
+# # Create test/train data sets of full data
+# inTraining <- createDataPartition(bank_clean$subscribed, p = .75, list = FALSE)
+# training <- bank_clean[ inTraining,]
+# testing  <- bank_clean[-inTraining,]
+# 
+# # Save bank_clean test/train sets
+# write_csv(training, here("data - output", "bank_clean_train.csv"))
+# write_csv(testing, here("data - output", "bank_clean_test.csv"))
+# 
+# # Down-sample the data to get an equal number of yes and no responses
+# bank_clean_ds <- downSample(x = bank_clean[, 1:19],
+#                             y = bank_clean$subscribed)
+# 
+# # Double-check the number of yes/no responses
+# bank_clean_ds %>% 
+#   count(Class)
+# 
+# # Save downsampled data set
+# write_csv(bank_clean_ds, here("data - output", "bank_clean_downsampled.csv"))
+# 
+# # Create test/train data sets of downsampled data
+# inTraining <- createDataPartition(bank_clean_ds$Class, p = .75, list = FALSE)
+# training <- bank_clean_ds[ inTraining,]
+# testing  <- bank_clean_ds[-inTraining,]
+# 
+# # Save downsampled data test/train sets
+# write_csv(training, here("data - output", "bank_clean_ds_train.csv"))
+# write_csv(testing, here("data - output", "bank_clean_ds_test.csv"))
+```
