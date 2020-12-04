@@ -11,29 +11,35 @@ knitr::opts_chunk$set(warning = FALSE)
 knitr::opts_chunk$set(message = FALSE)
 ```
 
-# Instructions
+# Project Description
 
-## Description
+Frito-Lay™ (Client) has contracted DDSAnalytics to conduct an analysis of existing employee data in order to assist the Client with predicting employee turnover (attrition), with a goal of reducing or preventing attrition.
 
-DDSAnalytics is an analytics company that specializes in talent management solutions for Fortune 100 companies. Talent management is defined as the iterative process of developing and retaining employees. It may include workforce planning, employee training programs, identifying high-potential employees and reducing/preventing voluntary employee turnover (attrition). To gain a competitive edge over its competition, DDSAnalytics is planning to leverage data science for talent management. The executive leadership has identified predicting employee turnover as its first application of data science for talent management. Before the business green lights the project, they have tasked your data science team to conduct an analysis of existing employee data. 
+## Deliverables
 
-## Model Creation
+Using R, conduct an analysis of the supplied data set with a goal of accomplishing the following:
 
-You have been given a data set (`CaseStudy2-data.csv`) to do a data analysis to identify factors that lead to attrition. You should identify the top three factors that contribute to turnover (backed up by evidence provided by analysis). There may or may not be a need to create derived attributes, variables, or features. The business is also interested in learning about any job role specific trends that may exist in the data set (e.g., “Data Scientists have the highest job satisfaction”). You can also provide any other interesting trends and observations from your analysis. The analysis should be backed up by robust experimentation and appropriate visualization. Experiments and analysis must be conducted in R. You will also be asked to build a model to predict attrition. Details are below. 
+1. Build a predictive model for attrition.
 
-## Model Performance
+2. Identify the top three factors that contribute to attrition.
 
-I provided an additional data set of 300 observations that do not have the labels (attrition or not attrition). We will refer to this data set as the “Competition Set” and is in the file `CaseStudy2CompSet No Attrition.csv`. You must provide a model that will attain at least 60% sensitivity and specificity (60 each = 120 total) for the training and the validation set.
+3. Identify any role-specific trends that may exist in the data.
 
-I have also provided an additional data set of 300 observations that do not have the Monthly Incomes. This data is in the file `CaseStudy2CompSet No Salary.csv`. You must provide a model that will attain a RMSE < $3000 for the training and the validation set.
+4. Build a linear regression model for monthly income.
 
-## Models to Use
+5. **OPTIONAL:** Create an RShiny app to assist with visualizing the results.
 
-For classifying attrition, you must use either k-NN or naive Bayes but may also use other models (logistic regression, random forest, LDA, SVM, etc) as long as you compare the results between the two or more models. You may then use any of the models to fulfill the 60/60 sensitivity/specificity requirement. This goes for regression as well; you must use linear regression but may include additional models for comparison and use in the competition (LASSO, random forest, ensemble models, etc.).
+## Available Data
 
-## Bonus
+- `CaseStudy2-data.csv` is the data set with which to conduct the analysis.
+- `CaseStudy2CompSet No Attrition.csv` is a data set of 300 observations that does not contain the attrition response variable and will be used to judge the efficacy of DDSAnalaytics' model. Client requires at least 60% sensitivity and specificity for the training and validation sets.
+- `CaseStudy2CompSet No Salary.csv` is a data set of 300 observations that does not contain the monthly income variable. Client requires the predictive model attain an RMSE < $3,000 for the training and validation sets.
 
-Up to 3 points: Create an RShiny App to help visualize you results. The amount of bonus points awarded will be based on correctness, creativeness, effectiveness of the visualization / app. 
+## Model Requirements
+
+The predictive model for classifying attrition should be built using either K-Nearest Neighbors or Naive Bayes. Additional models may be used for comparison and to fulfill the sensitivity/specificity requirement. 
+
+The regression must include linear regression, but additional models may be used for comparison and to fulfill the salary prediction competition.
 
 # Setup
 
@@ -48,7 +54,10 @@ library(caret)      # misc functions for training and plotting classification an
 library(tidymodels)
 library(GGally)     # for ggpairs
 library(MASS)       # for LDA/QDA
-library(dplyr)      # to get `select` back
+library(dplyr)      # to get `select` back natively
+library(inspectdf)  # data inspection reports
+library(hrbrthemes) # preferred themes for ggplot
+library(e1071)      # Naive Bayes
 ```
 
 ## Load Data
@@ -68,7 +77,7 @@ df_comp_no_att <- read_csv(here("data - raw", "CaseStudy2CompSet No Attrition.cs
 
 ```{r}
 # Clean the column names of each of the three data sets
-df            <- clean_names(df)
+df             <- clean_names(df)
 df_comp_no_sal <- clean_names(df_comp_no_sal)
 df_comp_no_att <- clean_names(df_comp_no_att)
 
@@ -78,18 +87,38 @@ glimpse(df)
 summary(df)
 skimr::skim(df)
 visdat::vis_dat(df)
-DataExplorer::create_report(df)
+# DataExplorer::create_report(df)
 # Hmisc::describe(df)
 # psych::describe(df)
 
 # Reports from inspectdf
-library(inspectdf)
 inspect_cat(df)
 inspect_cor(df)
 inspect_types(df)
-inspect_num(df, show_plot = TRUE)
+inspect_num(df)
 inspect_imb(df)
 ```
+
+## Observations from DataExplorer::create_report
+
+- No missing values
+- `id` column isn't useful and can be dropped
+- `over18` is exclusively "Y" and can be dropped
+- There is only one unique value of `employee_count` - the number 1
+- There is only one unique value of `standard_hours` - the number 80
+- `age` is the only variable that generally follows a standard deviation according to the QQ plots
+- There appear to be some fairly defined clusters in the rate and income columns (`daily_rate`, `hourly_rate`, `monthly_income`, `monthly_rate`). In addition, all of the rate columns seem to follow similar trends. It may be worth exploring whether all are needed.
+- A number of numeric columns appear that they may actually be numerically-coded categorical variables and may need to be re-coded:
+  - `education`
+  - `environment_satisfaction`
+  - `job_involvement`
+  - `job_level`
+  - `job_satisfaction`
+  - `performance_rating`
+  - `relationshup_satisfaction`
+  - `stock_option_level`
+  - `work_life_balance`
+- Overall attrition is 16.1%
 
 # EDA
 
@@ -109,56 +138,494 @@ ggcorr(
 )
 # ggsave(here::here("images", "correlation 1.png"))
 
-# Convert all character variables to factors
-df <- df %>% 
-  mutate(across(where(is_character),as_factor))
-
 glimpse(df)
 ```
 
-
-# Data Wrangling
-
 ```{r}
-
+# Convert all character variables to factors
+df_clean <- df %>% 
+  mutate(across(where(is_character),as_factor))
 ```
 
-
-# Create Test/Train Splits and Save Data
+It appears that there are a number of variables that are coded as numeric values, but are more likely numeric codes of categorical variables. We'll re-code those as factors.
 
 ```{r}
-# # Set seed
-# set.seed(123)
-# 
-# # Save full bank_clean data set
-# write_csv(bank_clean, here("data - output", "bank_clean.csv"))
-# 
-# # Create test/train data sets of full data
-# inTraining <- createDataPartition(bank_clean$subscribed, p = .75, list = FALSE)
-# training <- bank_clean[ inTraining,]
-# testing  <- bank_clean[-inTraining,]
-# 
-# # Save bank_clean test/train sets
-# write_csv(training, here("data - output", "bank_clean_train.csv"))
-# write_csv(testing, here("data - output", "bank_clean_test.csv"))
-# 
-# # Down-sample the data to get an equal number of yes and no responses
-# bank_clean_ds <- downSample(x = bank_clean[, 1:19],
-#                             y = bank_clean$subscribed)
-# 
-# # Double-check the number of yes/no responses
-# bank_clean_ds %>% 
-#   count(Class)
-# 
-# # Save downsampled data set
-# write_csv(bank_clean_ds, here("data - output", "bank_clean_downsampled.csv"))
-# 
-# # Create test/train data sets of downsampled data
-# inTraining <- createDataPartition(bank_clean_ds$Class, p = .75, list = FALSE)
-# training <- bank_clean_ds[ inTraining,]
-# testing  <- bank_clean_ds[-inTraining,]
-# 
-# # Save downsampled data test/train sets
-# write_csv(training, here("data - output", "bank_clean_ds_train.csv"))
-# write_csv(testing, here("data - output", "bank_clean_ds_test.csv"))
+df_clean <- df_clean %>%
+  mutate(across(
+    c(
+      education,
+      environment_satisfaction,
+      job_involvement,
+      job_level,
+      job_satisfaction,
+      performance_rating,
+      relationship_satisfaction,
+      stock_option_level,
+      work_life_balance
+    ),
+    as_factor
+  ))
 ```
+
+In order to focus our data set, we'll remove variables that appear to not be useful.
+
+```{r}
+df_clean <- df_clean %>% 
+  dplyr::select(-c(id,
+                   employee_count,
+                   over18,
+                   standard_hours,
+                   employee_number))
+```
+
+## Natural Attrition
+
+Having whittled down the data set, let's look more closely at the relationships between variables and attrition. First, we'll see if there is any sort of natural attrition due to employees retiring or aging out of the workforce that should be addressed.
+
+```{r}
+# Age
+df_clean %>% 
+  ggplot(aes(age, color = attrition)) +
+  geom_boxplot() +
+  labs(title = "Relationship Between:",
+       subtitle = "Age & Attrition",
+       x = "Age",
+       color = "Attrition") +
+  theme_ipsum()
+
+# Total Working Years
+df_clean %>% 
+  ggplot(aes(total_working_years, color = attrition)) +
+  geom_boxplot() +
+  labs(title = "Relationship Between:",
+       subtitle = "Total Working Years & Attrition",
+       x = "Total Working Years",
+       color = "Attrition") +
+  theme_ipsum()
+
+# Years at Company
+df_clean %>% 
+  ggplot(aes(years_at_company, color = attrition)) +
+  geom_boxplot() +
+  labs(title = "Relationship Between:",
+       subtitle = "Years at Company & Attrition",
+       x = "Years at Company",
+       color = "Attrition") +
+  theme_ipsum()
+```
+
+It certainly seems like people who are likely at the tail end of their careers are leaving the company naturally and don't need to be included in this model. 25-30 total working years seems reasonable. Let's see if there's a big difference in numbers:
+
+```{r}
+df_clean %>%
+  filter(total_working_years >= 25) %>% 
+  group_by(total_working_years) %>% 
+  count() %>% 
+  pivot_wider(names_from = total_working_years,
+              values_from = n) %>% 
+  mutate(twenty_five_plus = sum(1:14, na.rm = TRUE),
+         thirty_plus = sum(6:14, na.rm = TRUE)) %>% 
+  dplyr::select(15:16)
+```
+
+There is a 15-person (1.72%) difference between filtering total working years at 25 years vs. 30 years. We'll exclude anyone who has worked more than 30 years.
+
+```{r}
+df_clean <- df_clean %>% 
+  filter(total_working_years < 31)
+```
+
+Look at the correlation plot again after the work we've done so far.
+
+```{r}
+ggcorr(
+  df_clean,
+  label = TRUE,
+  label_alpha = TRUE,
+  label_size = 3,
+  layout.exp = 2,
+  cex = 3.5,
+  hjust = 1
+)
+```
+
+## Explore Attrition by Variable
+
+### Job Level
+
+```{r}
+df_clean %>% 
+  group_by(job_level, attrition) %>% 
+  count() %>% 
+  ggplot(aes(attrition, n, fill = attrition)) +
+  geom_col() +
+  facet_wrap(~ job_level, scales = "free_y") +
+  labs(title = "Attrition by Job Level",
+       x = "",
+       y = "Count",
+       fill = "Attrition") +
+  theme_ipsum()
+```
+
+If we presume that job level increases sequentially the longer he or she is in the workforce, newer workers (1) appear much more susceptible to attrition.
+
+### Job Role
+
+```{r}
+df_clean %>% 
+  group_by(job_role, attrition) %>% 
+  count() %>% 
+  ggplot(aes(attrition, n, fill = attrition)) +
+  geom_col() +
+  facet_wrap(~ job_role, scales = "free_y") +
+  labs(title = "Attrition by Job Role",
+       x = "",
+       y = "Count",
+       fill = "Attrition") +
+  theme_ipsum()
+```
+
+Based on the charts, sales representatives are split almost 50/50 on whether they'll leave the company. Other levels that also appear to have significant rates of attrition include research scientists, human resources, and possibly laboratory technicians.
+
+### Gender
+
+```{r}
+df_clean %>% 
+  group_by(gender, attrition) %>% 
+  count() %>% 
+  pivot_wider(names_from = attrition,
+              values_from = n) %>% 
+  mutate(Total = No + Yes,
+         Proportion = Yes / Total) %>% 
+  ggplot(aes(gender, Proportion)) +
+  geom_col(fill = "steelblue") +
+  scale_y_continuous(labels = percent) +
+  labs(title = "Proportion of Each Gender that Suffers from Attrition",
+       x = "",
+       y = "Proportion") +
+  theme_ipsum()
+```
+
+It appears that males tend to suffer from attrition at slightly higher rates than females.
+
+### Gender & Age
+
+```{r}
+df_clean %>% 
+  group_by(gender, attrition, age) %>% 
+  count(age) %>% 
+    ggplot(aes(age, n, fill = attrition)) +
+  geom_col(alpha = 0.6) +
+  facet_wrap(~ gender, scales = "free_y") +
+  labs(title = "Attrition by Age & Gender",
+       x = "",
+       y = "Count",
+       fill = "Attrition") +
+  theme_ipsum()
+```
+
+Looking at the two sets of histograms, it appears that both male and female attrition by age follow very similar distributions, however a couple of interesting observations can be seen:
+
+- More females aged 50-60 appear to remain in the workforce, while more males in the same age bracket appear to leave the company.
+- The histograms show slight right-skew distributions with a median around 35 years old.
+
+### Monthly Income
+
+```{r}
+df_clean %>% 
+  ggplot(aes(monthly_income, fill = attrition)) +
+  geom_histogram(alpha = 0.5) +
+  scale_x_continuous(labels = dollar) +
+  labs(title = "Attrition by Monthly Income",
+       x = "Monthly Income",
+       y = "",
+       fill = "Attrition") +
+  theme_ipsum()
+```
+
+As we'd expect, the distribution of monthly income is right-skewed with most employees appearing to land in the $2,500-$5,000 per month range.
+
+Employee attrition is concentrated within monthly incomes less than $5,000/month which makes sense. Employees who need or desire a higher salary, but are unable to achieve it within the company, will look for employment elsewhere with a higher salary.
+
+It's interesting to note the stair-step pattern that starts to appear around $12,500/month and peaks around $14,000/month. The trend then repeats twice more. 
+
+I would assume that the attrition from employees making around $20,000 a month is voluntary attrition from people who are either looking to retire or take on new challenges at other companies.
+
+### Age & Years at Company
+
+```{r}
+df_clean %>% 
+  ggplot(aes(age, years_at_company, color = attrition)) +
+  geom_jitter(alpha = 0.5) +
+  geom_smooth(method = "lm") +
+  labs(title = "Attrition by Age & Years at Company",
+       x = "Age",
+       y = "Years at Company",
+       fill = "Attrition") +
+  theme_ipsum()
+```
+
+### Age & Total Working Years
+
+```{r}
+df_clean %>% 
+  ggplot(aes(age, total_working_years, color = attrition)) +
+  geom_jitter(alpha = 0.5) +
+  geom_smooth(method = "lm") +
+  labs(title = "Attrition by Age & Total Working Years",
+       x = "Age",
+       y = "Total Working Years",
+       fill = "Attrition") +
+  theme_ipsum()
+```
+
+Both of these charts show in slightly more detail trends that we've already observed in previous histograms.
+
+### Distance from Home
+
+```{r}
+df_clean %>% 
+  ggplot(aes(distance_from_home, fill = attrition)) +
+  geom_histogram(alpha = 0.5) +
+  labs(title = "Attrition by Distance from Home",
+       x = "Distance (miles)",
+       y = "",
+       fill = "Attrition") +
+  theme_ipsum()
+```
+
+The trends for attrition vs. no-attrition seem to remain fairly consistent with one another as employees have longer and longer commutes.
+
+### Overtime
+
+```{r}
+df_clean %>% 
+  group_by(over_time, attrition) %>% 
+  count() %>% 
+  ggplot(aes(over_time, n, fill = attrition)) +
+  geom_col(alpha = 0.6) +
+  labs(title = "Attrition by Overtime Eligibility",
+       x = "Overtime Eligible?",
+       y = "",
+       fill = "Attrition") +
+  theme_ipsum()
+```
+
+It appears that attrition is a much more significant problem for employees who are overtime eligible. This lines up with what we know about the American workforce and our previous examination of monthly income. Lower paid workers tend to be those that are overtime eligible and both groups have higher rates of attrition.
+
+# Prediction Models
+
+## Test/Train Splits
+
+```{r}
+# Set seed
+set.seed(123)
+
+# Create a KNN data set that contains only attrition and numeric variables
+knn_df_clean <- df_clean %>% 
+  dplyr::select(c(1, 4, 6, 11, 17:19, 21, 25:26, 28:31, 2))
+
+# Double-check I got the right variables
+glimpse(knn_df_clean)
+
+# Create test/train data sets of full data
+inTraining <-
+  createDataPartition(knn_df_clean$attrition, p = .75, list = FALSE)
+training <- knn_df_clean[ inTraining,]
+testing  <- knn_df_clean[-inTraining,]
+
+# Estimate pre-processing parameters
+preproc_parameter <- training %>%
+  preProcess(method = c("center", "scale"))
+
+# Transform the data using the estimated parameters
+train_transform <- preproc_parameter %>% predict(training)
+test_transform <- preproc_parameter %>% predict(testing)
+
+# Double-check the number of yes/no responses
+train_transform %>%
+  count(attrition)
+```
+
+## KNN
+
+```{r}
+# Create control parameters for train
+knn_control <- trainControl(method = "repeatedcv",
+                            repeats = 10,
+                            number = 10,
+                            classProbs = TRUE,
+                            summaryFunction = twoClassSummary)
+
+# Create KNN model
+knn_model <- train(
+  attrition ~ .,
+  data = train_transform,
+  method = "knn",
+  trControl = knn_control,
+  tuneGrid = expand.grid(.k = seq(2, 20, by = 2)),
+  metric = "ROC"
+)
+
+# View results of KNN
+knn_model
+```
+
+Ultimately the performance of the KNN model isn't great, achieving a ROC of 0.6277 at k = 20). Because the KNN model is based only on the numeric values, we'd expect it to perform less well than other models.
+
+## Naive Bayes
+
+```{r}
+# Create Naive Bayes model using naivebayes packages to generate plots
+
+# Create Naive Bayes model
+nb_model <- naivebayes::naive_bayes(attrition ~ ., data = training)
+
+# View results of Naive Bayes
+nb_model
+
+# View summary of Naive Bayes
+summary(nb_model)
+
+# Plot Naive Bayes results
+plot(nb_model)
+```
+
+```{r}
+# Create Naive Bayes model
+nb_model <- naiveBayes(attrition ~ .,
+                       data = training)
+
+# View results of Naive Bayes
+nb_model
+
+# View summary of Naive Bayes
+summary(nb_model)
+
+# Run predictions on the testing data
+nb_predict <- predict(nb_model,
+                      testing,
+                      type = "raw")
+
+# Create confusion matrix
+confusionMatrix(table(predict(nb_model, 
+                              testing), 
+                      testing$attrition))
+```
+
+The Naive Bayes model performs much better than the KNN model. Accuracy is up to 77.25%, specificity is 84.75%, and specificity is 38.24%.
+
+Does changing the cutoff value improve performance at all?
+
+```{r}
+nb_cutoff <- factor(if_else(nb_predict[, 2] > 0.4, 
+                            "Yes", 
+                            "No"))
+
+confusionMatrix(nb_cutoff, testing$attrition)
+```
+
+With a cutoff value of 0.4, accuracy drops to 75.7%, sensitivity remains at 79.3%, but specificity rises to 57.6%. At this point, none of our models are fabulous.
+
+## Random Forest
+
+```{r}
+# Create random forest model
+
+# Define cross-validation attempts
+rf_grid <- expand.grid(mtry = c(10, 50, 100, 500, 1000))
+
+# Create random forest control parameters
+rf_control <- trainControl(method = "repeatedcv",
+                           number = 10,
+                           repeats = 5,
+                           classProbs = TRUE,
+                           summaryFunction = twoClassSummary)
+
+# Create random forest model
+rf_model <- train(
+  attrition ~ .,
+  data = training,
+  method = "rf",
+  trControl = rf_control,
+  tuneGrid = rf_grid,
+  metric = "ROC"
+)
+
+rf_model
+varImp(rf_model)
+```
+
+## Naive Bayes (part 2)
+
+What happens if we re-run our Naive Bayes model with the top variables from the random forest model?
+
+```{r}
+# Create Naive Bayes model
+nb_model <- naiveBayes(attrition ~
+                         monthly_income +
+                         monthly_rate +
+                         age +
+                         daily_rate +
+                         hourly_rate,
+                       data = training)
+
+# View results of Naive Bayes
+nb_model
+
+# View summary of Naive Bayes
+summary(nb_model)
+
+# Run predictions on the testing data
+nb_predict <- predict(nb_model,
+                      testing,
+                      type = "raw")
+
+# Create confusion matrix
+confusionMatrix(table(predict(nb_model, 
+                              testing), 
+                      testing$attrition))
+```
+
+# Linear Regression Models
+
+## All Variables
+
+```{r}
+# Create linear model
+lm_model <- lm(monthly_income ~ .,
+               data = training)
+
+# View model summary
+summary(lm_model)
+
+# Review residual plots
+plot(lm_model)
+```
+
+The linear regression model using all of the variables returns an Adjusted R-Squared value of 0.4739. The QQ plot indicates `monthly_income` is not normally distributed (which lines up with our EDA). We'll see if a log transformation helps.
+
+## Log Transformation
+
+```{r}
+# Create linear model
+lm_model <- lm(log(monthly_income) ~ .,
+               data = training)
+
+# View model summary
+summary(lm_model)
+
+# Review residual plots
+plot(lm_model)
+```
+
+The residuals with the log transformation look much more normally distributed. We'll proceed with this transformation.
+
+## Check Predictions
+
+```{r}
+# Run predictions on test set and check model performance
+lm_predict <- predict(lm_model, newdata = testing)
+postResample(exp(lm_predict), testing$monthly_income)
+```
+With the log transformation, our model produces an RMSE of $2,997.28 and an R-Squared of 0.52.
