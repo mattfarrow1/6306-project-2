@@ -51,13 +51,14 @@ library(here)       # relative location references
 library(janitor)    # data cleanup tools
 library(naniar)     # dealing with missing values
 library(caret)      # misc functions for training and plotting classification and regression models
-library(tidymodels)
+# library(tidymodels)
 library(GGally)     # for ggpairs
 library(MASS)       # for LDA/QDA
 library(dplyr)      # to get `select` back natively
 library(inspectdf)  # data inspection reports
 library(hrbrthemes) # preferred themes for ggplot
 library(e1071)      # Naive Bayes
+library(scales)     # formatting axes in ggplot
 ```
 
 ## Load Data
@@ -228,7 +229,7 @@ df_clean %>%
   dplyr::select(15:16)
 ```
 
-There is a 15-person (1.72%) difference between filtering total working years at 25 years vs. 30 years. We'll exclude anyone who has worked more than 30 years.
+There is a 15-person (1.72%) difference between filtering total working years at 25 years vs. 30 years. To be safe, we'll exclude anyone who has worked more than 30 years.
 
 ```{r}
 df_clean <- df_clean %>% 
@@ -277,12 +278,22 @@ df_clean %>%
   count() %>% 
   ggplot(aes(attrition, n, fill = attrition)) +
   geom_col() +
-  facet_wrap(~ job_role, scales = "free_y") +
+  facet_wrap(~ job_role, scales = "free", ncol = 2) +
   labs(title = "Attrition by Job Role",
        x = "",
-       y = "Count",
+       y = "",
        fill = "Attrition") +
-  theme_ipsum()
+  theme_ipsum() +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none")
+
+df_clean %>% 
+  group_by(job_role, attrition) %>% 
+  count() %>% 
+  pivot_wider(names_from = attrition,
+              values_from = n) %>% 
+  mutate(total = No + Yes,
+         pct = Yes / total)
 ```
 
 Based on the charts, sales representatives are split almost 50/50 on whether they'll leave the company. Other levels that also appear to have significant rates of attrition include research scientists, human resources, and possibly laboratory technicians.
@@ -300,7 +311,7 @@ df_clean %>%
   ggplot(aes(gender, Proportion)) +
   geom_col(fill = "steelblue") +
   scale_y_continuous(labels = percent) +
-  labs(title = "Proportion of Each Gender that Suffers from Attrition",
+  labs(title = "Proportion of Each Gender that\nSuffers from Attrition",
        x = "",
        y = "Proportion") +
   theme_ipsum()
@@ -343,13 +354,30 @@ df_clean %>%
   theme_ipsum()
 ```
 
-As we'd expect, the distribution of monthly income is right-skewed with most employees appearing to land in the $2,500-$5,000 per month range.
+As we'd expect, the distribution of monthly income is right-skewed with most employees appearing to land in the $2,500-$5,000 per month range. But is it statistically significant?
+
+```{r}
+# NULL & Alternative
+
+# H_0: the mean monthly income for those who left is equal to those who did not
+
+# H_A: the mean monthly income is not equal between the two groups
+
+# Run t.test
+t.test(monthly_income ~ attrition, 
+       data = df_clean,
+       alternative = "two.sided",
+       mu = 0,
+       conf.level = 0.95)
+```
+
+Based on a Welch's Two-Sample t-test, we reject our NULL hypothesis that the mean monthly income between those who left and those who stayed is equal (p-value = 2.929e-07). A 95% confidence interval of monthly income is between $1,141.94 and $2,498.72. 
 
 Employee attrition is concentrated within monthly incomes less than $5,000/month which makes sense. Employees who need or desire a higher salary, but are unable to achieve it within the company, will look for employment elsewhere with a higher salary.
 
 It's interesting to note the stair-step pattern that starts to appear around $12,500/month and peaks around $14,000/month. The trend then repeats twice more. 
 
-I would assume that the attrition from employees making around $20,000 a month is voluntary attrition from people who are either looking to retire or take on new challenges at other companies.
+It's possible that the attrition from employees making around $20,000 a month is voluntary attrition from people who are either looking to retire or take on new challenges at other companies.
 
 ### Age & Years at Company
 
@@ -379,7 +407,30 @@ df_clean %>%
   theme_ipsum()
 ```
 
-Both of these charts show in slightly more detail trends that we've already observed in previous histograms.
+Both of these charts show in slightly more detail trends that we've already observed in previous histograms. Let's run t.tests to see if there is a statistically significant difference.
+
+```{r}
+# Run t.test
+t.test(age ~ attrition, 
+       data = df_clean,
+       alternative = "two.sided",
+       mu = 0,
+       conf.level = 0.95)
+
+# Run t.test
+t.test(years_at_company ~ attrition, 
+       data = df_clean,
+       alternative = "two.sided",
+       mu = 0,
+       conf.level = 0.95)
+
+# Run t.test
+t.test(total_working_years ~ attrition, 
+       data = df_clean,
+       alternative = "two.sided",
+       mu = 0,
+       conf.level = 0.95)
+```
 
 ### Distance from Home
 
@@ -408,59 +459,181 @@ df_clean %>%
        x = "Overtime Eligible?",
        y = "",
        fill = "Attrition") +
-  theme_ipsum()
+  theme_ipsum() +
+  theme(legend.position = "none")
+
+df_clean %>% 
+  group_by(over_time, attrition) %>% 
+  count() %>% 
+  pivot_wider(names_from = attrition,
+              values_from = n) %>% 
+  mutate(Total = No + Yes,
+         PCT = Yes / Total)
 ```
 
 It appears that attrition is a much more significant problem for employees who are overtime eligible. This lines up with what we know about the American workforce and our previous examination of monthly income. Lower paid workers tend to be those that are overtime eligible and both groups have higher rates of attrition.
 
+### Environment Satisfaction
+
+```{r}
+df_clean %>% 
+  group_by(environment_satisfaction, attrition) %>% 
+  count() %>% 
+  ggplot(aes(environment_satisfaction, n, fill = attrition)) +
+  geom_col(alpha = 0.6) +
+  labs(title = "Attrition by Environment Satisfaction",
+       x = "Environment Satisfaction",
+       y = "",
+       fill = "Attrition") +
+  theme_ipsum() +
+  theme(legend.position = "none")
+
+df_clean %>% 
+  group_by(environment_satisfaction, attrition) %>% 
+  count() %>% 
+  pivot_wider(names_from = attrition,
+              values_from = n) %>% 
+  mutate(Total = No + Yes,
+         PCT = Yes / Total)
+```
+
+There is a 10% level of attrition with employees who list their environment satisfaction as a 1.
+
+### Work Life Balance
+
+```{r}
+df_clean %>% 
+  group_by(work_life_balance, attrition) %>% 
+  count() %>% 
+  ggplot(aes(work_life_balance, n, fill = attrition)) +
+  geom_col(alpha = 0.6) +
+  labs(title = "Attrition by Work/Life Balance",
+       x = "Work/Life Balance",
+       y = "",
+       fill = "Attrition") +
+  theme_ipsum() +
+  theme(legend.position = "none")
+
+df_clean %>% 
+  group_by(work_life_balance, attrition) %>% 
+  count() %>% 
+  pivot_wider(names_from = attrition,
+              values_from = n) %>% 
+  mutate(Total = No + Yes,
+         PCT = Yes / Total)
+```
+
+Although they were the smallest population (48 out of 870), employees who rated their work/life balance as a 1 were 20% more likely to suffer from attrition.
+
 # Prediction Models
 
 ## Test/Train Splits
+
+### Full Data
+
+```{r}
+# Set seed
+set.seed(123)
+
+# Create test/train data sets of full data
+inTraining <-
+  createDataPartition(df_clean$attrition, p = .75, list = FALSE)
+train_full <- df_clean[ inTraining,]
+test_full  <- df_clean[-inTraining,]
+```
+
+### Full Data, down-sampled
+
+```{r}
+# Down-sample the data to get an equal number of yes and no responses
+df_clean_ds <- downSample(x = df_clean[, c(1, 3:31)],
+                          y = df_clean$attrition)
+
+# Rename Class to attrition
+df_clean_ds <- df_clean_ds %>% 
+  rename(attrition = Class)
+
+# Create test/train data sets of full, down-sampled data
+inTraining <-
+  createDataPartition(df_clean_ds$attrition, p = .75, list = FALSE)
+train_full_ds <- df_clean_ds[inTraining, ]
+test_full_ds  <- df_clean_ds[-inTraining, ]
+```
+
+### Numeric-Only (for KNN)
 
 ```{r}
 # Set seed
 set.seed(123)
 
 # Create a KNN data set that contains only attrition and numeric variables
-knn_df_clean <- df_clean %>% 
+df_clean_knn <- df_clean %>% 
   dplyr::select(c(1, 4, 6, 11, 17:19, 21, 25:26, 28:31, 2))
-
-# Double-check I got the right variables
-glimpse(knn_df_clean)
 
 # Create test/train data sets of full data
 inTraining <-
-  createDataPartition(knn_df_clean$attrition, p = .75, list = FALSE)
-training <- knn_df_clean[ inTraining,]
-testing  <- knn_df_clean[-inTraining,]
+  createDataPartition(df_clean_knn$attrition, p = .75, list = FALSE)
+train_knn <- df_clean_knn[ inTraining,]
+test_knn  <- df_clean_knn[-inTraining,]
+```
 
+### Numeric-Only (for KNN), pre-processed
+
+```{r}
 # Estimate pre-processing parameters
-preproc_parameter <- training %>%
-  preProcess(method = c("center", "scale"))
+preproc_parameter <- train_knn %>%
+  preProcess(method = c("scale"))
 
 # Transform the data using the estimated parameters
-train_transform <- preproc_parameter %>% predict(training)
-test_transform <- preproc_parameter %>% predict(testing)
+train_knn_transform <- preproc_parameter %>% predict(train_knn)
+test_knn_transform <- preproc_parameter %>% predict(test_knn)
 
 # Double-check the number of yes/no responses
-train_transform %>%
+train_knn_transform %>%
+  count(attrition)
+```
+
+### Numeric-Only (for KNN), down-sampled
+
+```{r}
+# Down-sample the data to get an equal number of yes and no responses
+df_clean_knn_ds <- downSample(x = df_clean_knn[, 1:14],
+                              y = df_clean_knn$attrition)
+
+# Rename Class to attrition
+df_clean_knn_ds <- df_clean_knn_ds %>% 
+  rename(attrition = Class)
+
+# Create test/train data sets of numeric, down-sampled data
+inTraining <-
+  createDataPartition(df_clean_knn_ds$attrition, p = .75, list = FALSE)
+train_knn_ds <- df_clean_knn_ds[inTraining, ]
+test_knn_ds  <- df_clean_knn_ds[-inTraining, ]
+
+# Double-check the number of yes/no responses
+train_knn_ds %>%
   count(attrition)
 ```
 
 ## KNN
 
 ```{r}
+train_set <- train_knn_transform
+test_set  <- test_knn_transform
+
 # Create control parameters for train
-knn_control <- trainControl(method = "repeatedcv",
-                            repeats = 10,
-                            number = 10,
-                            classProbs = TRUE,
-                            summaryFunction = twoClassSummary)
+knn_control <- trainControl(
+  method = "repeatedcv",
+  repeats = 10,
+  number = 10,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary
+)
 
 # Create KNN model
 knn_model <- train(
   attrition ~ .,
-  data = train_transform,
+  data = train_set,
   method = "knn",
   trControl = knn_control,
   tuneGrid = expand.grid(.k = seq(2, 20, by = 2)),
@@ -471,30 +644,42 @@ knn_model <- train(
 knn_model
 ```
 
-Ultimately the performance of the KNN model isn't great, achieving a ROC of 0.6277 at k = 20). Because the KNN model is based only on the numeric values, we'd expect it to perform less well than other models.
+Ultimately the performance of the preprocessed KNN model is the best performing, achieving a ROC of 0.64 at k = 20). Because the KNN model is based only on the numeric values, we'd expect it to perform less well than other models.
 
 ## Naive Bayes
 
 ```{r}
-# Create Naive Bayes model using naivebayes packages to generate plots
-
-# Create Naive Bayes model
-nb_model <- naivebayes::naive_bayes(attrition ~ ., data = training)
-
-# View results of Naive Bayes
-nb_model
-
-# View summary of Naive Bayes
-summary(nb_model)
-
-# Plot Naive Bayes results
-plot(nb_model)
+# # Create Naive Bayes model using naivebayes packages to generate plots
+# 
+# # Create Naive Bayes model
+# nb_model <- naivebayes::naive_bayes(attrition ~ ., 
+#                                     data = train_full,
+#                                     laplace = 0.5)
+# 
+# # View results of Naive Bayes
+# nb_model
+# 
+# # View summary of Naive Bayes
+# summary(nb_model)
+# 
+# # Plot Naive Bayes results
+# plot(nb_model)
+# 
+# # Run predictions on the testing data
+# nb_predict <- predict(nb_model,
+#                       test_full,
+#                       type = "raw")
+# 
+# # Create confusion matrix
+# confusionMatrix(table(predict(nb_model, 
+#                               test_full), 
+#                       test_full$attrition))
 ```
 
 ```{r}
 # Create Naive Bayes model
 nb_model <- naiveBayes(attrition ~ .,
-                       data = training)
+                       data = train_full)
 
 # View results of Naive Bayes
 nb_model
@@ -504,16 +689,16 @@ summary(nb_model)
 
 # Run predictions on the testing data
 nb_predict <- predict(nb_model,
-                      testing,
+                      test_full,
                       type = "raw")
 
 # Create confusion matrix
 confusionMatrix(table(predict(nb_model, 
-                              testing), 
-                      testing$attrition))
+                              test_full), 
+                      test_full$attrition))
 ```
 
-The Naive Bayes model performs much better than the KNN model. Accuracy is up to 77.25%, specificity is 84.75%, and specificity is 38.24%.
+The Naive Bayes model performs much better than the KNN model. Accuracy is up to 76.96%, sensitivity is 78.02%, and specificity is 71.43%.
 
 Does changing the cutoff value improve performance at all?
 
@@ -522,10 +707,10 @@ nb_cutoff <- factor(if_else(nb_predict[, 2] > 0.4,
                             "Yes", 
                             "No"))
 
-confusionMatrix(nb_cutoff, testing$attrition)
+confusionMatrix(nb_cutoff, test_full$attrition)
 ```
 
-With a cutoff value of 0.4, accuracy drops to 75.7%, sensitivity remains at 79.3%, but specificity rises to 57.6%. At this point, none of our models are fabulous.
+With a cutoff value of 0.4, accuracy drops to 74.65%, sensitivity drops to 74.73%%, but specificity rises to 74.29%. Our first Naive Bayes model is the best performing so far.
 
 ## Random Forest
 
@@ -545,7 +730,7 @@ rf_control <- trainControl(method = "repeatedcv",
 # Create random forest model
 rf_model <- train(
   attrition ~ .,
-  data = training,
+  data = train_full,
   method = "rf",
   trControl = rf_control,
   tuneGrid = rf_grid,
@@ -558,17 +743,20 @@ varImp(rf_model)
 
 ## Naive Bayes (part 2)
 
-What happens if we re-run our Naive Bayes model with the top variables from the random forest model?
+What happens if we re-run our Naive Bayes model with the top 8 variables from the random forest model?
 
 ```{r}
 # Create Naive Bayes model
 nb_model <- naiveBayes(attrition ~
-                         monthly_income +
-                         monthly_rate +
                          age +
+                         monthly_income +
+                         over_time +
+                         total_working_years +
                          daily_rate +
-                         hourly_rate,
-                       data = training)
+                         distance_from_home +
+                         years_at_company +
+                         percent_salary_hike,
+                       data = train_full)
 
 # View results of Naive Bayes
 nb_model
@@ -578,23 +766,25 @@ summary(nb_model)
 
 # Run predictions on the testing data
 nb_predict <- predict(nb_model,
-                      testing,
+                      test_full,
                       type = "raw")
 
 # Create confusion matrix
 confusionMatrix(table(predict(nb_model, 
-                              testing), 
-                      testing$attrition))
+                              test_full), 
+                      test_full$attrition))
 ```
 
-# Linear Regression Models
+Using the top predictors from the random forest model in our naive bayes model, we get an accuracy of 81.57%, a specificity of 89.01%, but a specificity of 42.86%.
 
-## All Variables
+## Linear Regression Models
+
+### All Variables
 
 ```{r}
 # Create linear model
 lm_model <- lm(monthly_income ~ .,
-               data = training)
+               data = train_full)
 
 # View model summary
 summary(lm_model)
@@ -603,14 +793,14 @@ summary(lm_model)
 plot(lm_model)
 ```
 
-The linear regression model using all of the variables returns an Adjusted R-Squared value of 0.4739. The QQ plot indicates `monthly_income` is not normally distributed (which lines up with our EDA). We'll see if a log transformation helps.
+The linear regression model using all of the variables returns an Adjusted R-Squared value of 0.9417. The QQ plot indicates `monthly_income` is not normally distributed (which lines up with our EDA). We'll see if a log transformation helps.
 
-## Log Transformation
+### Log Transformation
 
 ```{r}
 # Create linear model
 lm_model <- lm(log(monthly_income) ~ .,
-               data = training)
+               data = train_full)
 
 # View model summary
 summary(lm_model)
@@ -619,13 +809,121 @@ summary(lm_model)
 plot(lm_model)
 ```
 
-The residuals with the log transformation look much more normally distributed. We'll proceed with this transformation.
+The residuals with the log transformation look much more normally distributed, although Adjusted R-Squared drops to 0.8814. We'll proceed with this transformation.
 
-## Check Predictions
+### Check Predictions
 
 ```{r}
 # Run predictions on test set and check model performance
-lm_predict <- predict(lm_model, newdata = testing)
-postResample(exp(lm_predict), testing$monthly_income)
+lm_predict <- predict(lm_model, newdata = test_full)
+postResample(exp(lm_predict), test_full$monthly_income)
 ```
-With the log transformation, our model produces an RMSE of $2,997.28 and an R-Squared of 0.52.
+With the log transformation, our model produces an RMSE of $1,089.94 and an R-Squared of 0.9407.
+
+# Deliverables
+
+## Attrition Classifier
+
+### Match Data to Model Data
+
+```{r}
+# Convert all character variables to factors
+df_comp_no_att_clean <- df_comp_no_att %>% 
+  mutate(across(where(is_character),as_factor))
+
+# Re-code certain numeric values as factors
+df_comp_no_att_clean <- df_comp_no_att_clean %>%
+  mutate(across(
+    c(
+      education,
+      environment_satisfaction,
+      job_involvement,
+      job_level,
+      job_satisfaction,
+      performance_rating,
+      relationship_satisfaction,
+      stock_option_level,
+      work_life_balance
+    ),
+    as_factor
+  ))
+
+# Remove unhelpful variables
+df_comp_no_att_clean <- df_comp_no_att_clean %>% 
+  dplyr::select(-c(employee_count,
+                   over18,
+                   standard_hours,
+                   employee_number))
+```
+
+### Predictions
+
+```{r}
+# Apply prediction to data set
+predict_attrition <- predict(knn_model,
+                             newdata = df_comp_no_att_clean[, 2:31])
+
+# Merge predictions back into data set
+df_comp_no_att_clean_done <- df_comp_no_att_clean %>% 
+  mutate(attrition = predict_attrition)
+
+# Keep only the ID and Prediction columns
+df_comp_no_att_clean_done <- df_comp_no_att_clean_done %>% 
+  dplyr::select(id, attrition)
+
+# Save data
+write_csv(df_comp_no_att_clean_done, here("data - output", "Farrow_Attrition_Predictions.csv"))
+```
+
+## Salary Predictions
+
+### Match Data to Model Data
+
+```{r}
+# Convert all character variables to factors
+df_comp_no_sal_clean <- df_comp_no_sal %>% 
+  mutate(across(where(is_character),as_factor))
+
+# Re-code certain numeric values as factors
+df_comp_no_sal_clean <- df_comp_no_sal_clean %>%
+  mutate(across(
+    c(
+      education,
+      environment_satisfaction,
+      job_involvement,
+      job_level,
+      job_satisfaction,
+      performance_rating,
+      relationship_satisfaction,
+      stock_option_level,
+      work_life_balance
+    ),
+    as_factor
+  ))
+
+# Remove unhelpful variables
+df_comp_no_sal_clean <- df_comp_no_sal_clean %>% 
+  dplyr::select(-c(employee_count,
+                   over18,
+                   standard_hours,
+                   employee_number))
+```
+
+### Predictions
+
+```{r}
+# Apply prediction to data set
+predict_salary <- predict(lm_model,
+                             newdata = df_comp_no_sal_clean[, 2:31])
+
+# Merge predictions back into data set
+df_comp_no_sal_clean_done <- df_comp_no_sal_clean %>% 
+  mutate(monthly_income = exp(predict_salary))
+
+# Keep only the ID and Prediction columns
+df_comp_no_sal_clean_done <- df_comp_no_sal_clean_done %>% 
+  dplyr::select(id, monthly_income)
+
+# Save data
+write_csv(df_comp_no_sal_clean_done, here("data - output", "Farrow_Salary_Predictions.csv"))
+```
